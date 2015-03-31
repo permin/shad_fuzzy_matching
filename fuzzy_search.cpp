@@ -69,7 +69,30 @@ private:
 namespace traverses {
 
 template<class Visitor, class Graph, class Vertex>
-void BreadthFirstSearch(Vertex origin_vertex, const Graph& graph, Visitor visitor);
+void BreadthFirstSearch(Vertex origin_vertex, const Graph& graph, Visitor visitor)
+{
+    std::queue<Vertex> queue;
+    // Used to prevent cycles, if graph has any.
+    std::unordered_set<Vertex> visited;
+    visited.push(origin_vertex);
+    visitor.DiscoverVertex(origin_vertex);
+    queue.push(origin_vertex);
+    while (!queue.empty()) {
+        Vertex current_vertex = queue.top();
+        queue.pop();
+        visitor.ExamineVertex(current_vertex);
+        std::vector<typename Graph::Edge> edges = graph.OutgoingEdges(current_vertex);
+        for (auto it = edges.begin(); it != edges.end(); ++it) {
+            Vertex next_vertex = GetTarget(*it);
+            visitor.ExamineEdge(*it);
+            if (!visited.count(next_vertex)) {
+               visited.push(next_vertex); 
+               visitor.DiscoverVertex(next_vertex);
+               queue.push(next_vertex);
+            }
+        }
+    }
+}
 
 /*
  * Для начала мы рекомендуем ознакомиться с общей
@@ -118,10 +141,26 @@ struct AutomatonNode {
 };
 
 // Returns nullptr if there is no such transition
-AutomatonNode* GetTrieTransition(AutomatonNode* node, char character);
+AutomatonNode* GetTrieTransition(AutomatonNode* node, char character)
+{
+    auto next_node_iterator = node->trie_transitions.find(character);
+    if (next_node_iterator == node->trie_transitions.end()) {
+        return nullptr;
+    } else {
+        return &next_node_iterator->second;
+    }
+}
 
 // Performs transition in automaton
-AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character);
+AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character)
+{
+    auto next_node_iterator = node->automaton_transitions.find(character);
+    if (next_node_iterator == node->automaton_transitions.end()) {
+        return root;
+    } else {
+        return next_node_iterator->second;
+    }
+}
 
 namespace internal {
 
@@ -144,7 +183,15 @@ public:
     };
 
     // Returns edges corresponding to all trie transitions from vertex
-    std::vector<Edge> OutgoingEdges(AutomatonNode* vertex) const;
+    std::vector<Edge> OutgoingEdges(AutomatonNode* vertex) const
+    {
+        std::vector <Edge> edges;
+        for (auto it = vertex->trie_transitions.begin(); it != vertex->trie_transitions.end(); ++it )
+        {
+            edges.push_back(Edge(vertex, &(it->second), it->first));
+        }    
+        return edges;
+    }
 };
 
 AutomatonNode* GetTarget(const AutomatonGraph::Edge& edge);
@@ -155,9 +202,9 @@ public:
     explicit SuffixLinkCalculator(AutomatonNode* root):
         root_(root) {}
 
-    void ExamineVertex(AutomatonNode* node) /*override*/;
+    void ExamineVertex(AutomatonNode* node) override;
 
-    void ExamineEdge(const AutomatonGraph::Edge& edge) /*override*/;
+    void ExamineEdge(const AutomatonGraph::Edge& edge) override;
 
 private:
     AutomatonNode* root_;
@@ -177,7 +224,7 @@ public:
      * как у нас слишком старый компилятор с++0x в
      * контесте, который выдaет compilation error
      */
-    void DiscoverVertex(AutomatonNode* node) /*override*/;
+    void DiscoverVertex(AutomatonNode* node) override;
 
 private:
     AutomatonNode* root_;
