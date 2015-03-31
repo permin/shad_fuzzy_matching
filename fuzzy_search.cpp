@@ -194,7 +194,10 @@ public:
     }
 };
 
-AutomatonNode* GetTarget(const AutomatonGraph::Edge& edge);
+AutomatonNode* GetTarget(const AutomatonGraph::Edge& edge)
+{
+    return edge.target;
+}
 
 class SuffixLinkCalculator:
     public traverses::BfsVisitor<AutomatonNode*, AutomatonGraph::Edge> {
@@ -202,9 +205,30 @@ public:
     explicit SuffixLinkCalculator(AutomatonNode* root):
         root_(root) {}
 
-    void ExamineVertex(AutomatonNode* node) override;
+    void ExamineVertex(AutomatonNode* node) override {
+        if (node == root_){
+            node->suffix_link = root_;
+        }
+    }
 
-    void ExamineEdge(const AutomatonGraph::Edge& edge) override;
+    void ExamineEdge(const AutomatonGraph::Edge& edge) override {
+        /// SHIT HAPPENS HERE
+        /// YOUR LIFE IS FULL OF TROUBLE
+        /// SUFFIX LINKS CAUSE CANCER
+        /// ARE YOU FROM INDIA???
+        /// CO-CO-CO-CO!
+        AutomatonNode* node = edge.source->suffix_link;
+        while (node != root_ && 
+              (node->trie_transitions.find(edge.character) == node->trie_transitions.end())) {
+            node = node->suffix_link;
+        }
+        auto it = node->trie_transitions.find(edge.character);
+        if (it == node->trie_transitions.end()) {
+            edge.target->suffix_link = root_;
+        } else {
+            edge.target->suffix_link = &it->second;
+        }
+    }
 
 private:
     AutomatonNode* root_;
@@ -276,19 +300,31 @@ public:
         node_(node), root_(root) {
     }
 
-    NodeReference Next(char character) const;
+    NodeReference Next(char character) const {
+        return NodeReference(node_->automaton_transitions[character], root_);
+    }
 
-    NodeReference suffixLink() const;
+    NodeReference suffixLink() const {
+        return NodeReference(node_->suffix_link, root_);
+    }
 
-    NodeReference terminalLink() const;
+    NodeReference terminalLink() const {
+        return NodeReference(node_->terminal_link, root_);
+    }
 
-    MatchedStringIteratorRange matchedStringIds() const;
+    MatchedStringIteratorRange matchedStringIds() const {
+        return MatchedStringIteratorRange(node_->matched_string_ids.begin(), 
+                                          node_->matched_string_ids.end());
+    }
 
     explicit operator bool() const {
         return node_ != nullptr;
     }
 
-    bool operator==(NodeReference other) const;
+    bool operator==(NodeReference other) const
+    {
+        return (node_ == other.node_ && root_ == other.root_);
+    }
 
 private:
     AutomatonNode* node_;
@@ -350,7 +386,10 @@ private:
 
 class AutomatonBuilder {
 public:
-    void Add(const std::string& string, size_t id);
+    void Add(const std::string& string, size_t id) {
+        words_.push_back(string);
+        ids_.push_back(id);
+    }
 
     std::unique_ptr<Automaton> Build() {
         auto automaton = make_unique<Automaton>();
@@ -369,9 +408,26 @@ private:
         }
     }
 
-    static void AddString(AutomatonNode* root, size_t string_id, const std::string& string);
+    static void AddString(AutomatonNode* root, size_t string_id, const std::string& string) {
+        AutomatonNode* node = root;
+        for (auto it = string.begin(); it != string.end(); ++it)
+        {
+            AutomatonNode* next_node = GetTrieTransition(node, *it);
+            if (next_node == nullptr) {
+                next_node = new AutomatonNode();
+                node->trie_transitions[*it] = *next_node;
 
-    static void BuildSuffixLinks(Automaton* automaton);
+            }
+            node = next_node;
+        }
+        node->matched_string_ids.push_back(string_id);
+    }
+
+    static void BuildSuffixLinks(Automaton* automaton) {
+       AutomatonNode* node = &automaton->root_; 
+       node->suffix_link = node;
+
+    }
 
     static void BuildTerminalLinks(Automaton* automaton);
 
