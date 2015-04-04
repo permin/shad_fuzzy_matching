@@ -74,11 +74,11 @@ void BreadthFirstSearch(Vertex origin_vertex, const Graph& graph, Visitor visito
     std::queue<Vertex> queue;
     // Used to prevent cycles, if graph has any.
     std::unordered_set<Vertex> visited;
-    visited.push(origin_vertex);
+    visited.insert(origin_vertex);
     visitor.DiscoverVertex(origin_vertex);
     queue.push(origin_vertex);
     while (!queue.empty()) {
-        Vertex current_vertex = queue.top();
+        Vertex current_vertex = queue.front();
         queue.pop();
         visitor.ExamineVertex(current_vertex);
         std::vector<typename Graph::Edge> edges = graph.OutgoingEdges(current_vertex);
@@ -86,7 +86,7 @@ void BreadthFirstSearch(Vertex origin_vertex, const Graph& graph, Visitor visito
             Vertex next_vertex = GetTarget(*it);
             visitor.ExamineEdge(*it);
             if (!visited.count(next_vertex)) {
-               visited.push(next_vertex); 
+               visited.insert(next_vertex); 
                visitor.DiscoverVertex(next_vertex);
                queue.push(next_vertex);
             }
@@ -143,22 +143,20 @@ struct AutomatonNode {
 // Returns nullptr if there is no such transition
 AutomatonNode* GetTrieTransition(AutomatonNode* node, char character)
 {
-    auto next_node_iterator = node->trie_transitions.find(character);
-    if (next_node_iterator == node->trie_transitions.end()) {
+    if (node->trie_transitions.count(character) == 0) {
         return nullptr;
     } else {
-        return &next_node_iterator->second;
+        return &(node->trie_transitions.find(character)->second);
     }
 }
 
 // Performs transition in automaton
 AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character)
 {
-    auto next_node_iterator = node->automaton_transitions.find(character);
-    if (next_node_iterator == node->automaton_transitions.end()) {
+    if (node->automaton_transitions.count(character) == 0) {
         return root;
     } else {
-        return next_node_iterator->second;
+        return node->automaton_transitions.find(character)->second;
     }
 }
 
@@ -211,22 +209,12 @@ public:
     }
 
     void ExamineEdge(const AutomatonGraph::Edge& edge) override {
-        /// SHIT HAPPENS HERE
-        /// YOUR LIFE IS FULL OF TROUBLE
-        /// SUFFIX LINKS CAUSE CANCER
-        /// ARE YOU FROM INDIA???
-        /// CO-CO-CO-CO!
+        // Almost perfect
         AutomatonNode* node = edge.source->suffix_link;
-        while (node != root_ && 
-              (node->trie_transitions.find(edge.character) == node->trie_transitions.end())) {
+        while (node != root_ && node->automaton_transitions.count(edge.character) == 0) {
             node = node->suffix_link;
         }
-        auto it = node->trie_transitions.find(edge.character);
-        if (it == node->trie_transitions.end()) {
-            edge.target->suffix_link = root_;
-        } else {
-            edge.target->suffix_link = &it->second;
-        }
+        edge.target->suffix_link = GetNextNode(node, root_, edge.character);
     }
 
 private:
@@ -247,7 +235,18 @@ public:
      * как у нас слишком старый компилятор с++0x в
      * контесте, который выдaет compilation error
      */
-    void DiscoverVertex(AutomatonNode* node) override;
+    void DiscoverVertex(AutomatonNode* node) override {
+        // TBD: may be it should be linked to nullptr
+        if (node->suffix_link == root_) {
+            node->terminal_link = root_;
+            return;
+        }
+        if ((node->suffix_link)->matched_string_ids.empty()) {
+           node->terminal_link = (node->suffix_link)->terminal_link; 
+        } else {
+           node->terminal_link = node->suffix_link; 
+        }
+    }
 
 private:
     AutomatonNode* root_;
@@ -424,12 +423,12 @@ private:
 
     static void BuildSuffixLinks(Automaton* automaton) {
         internal::SuffixLinkCalculator visitor(&automaton->root_);
-        traverses::BreadthFirstSearch(automaton->root_, internal::AutomatonGraph(), visitor);
+        traverses::BreadthFirstSearch(&automaton->root_, internal::AutomatonGraph(), visitor);
     }
 
     static void BuildTerminalLinks(Automaton* automaton) {
         internal::TerminalLinkCalculator visitor(&automaton->root_);
-        traverses::BreadthFirstSearch(automaton->root_, internal::AutomatonGraph(), visitor);
+        traverses::BreadthFirstSearch(&automaton->root_, internal::AutomatonGraph(), visitor);
     }
 
     std::vector<std::string> words_;
