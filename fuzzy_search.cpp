@@ -183,12 +183,11 @@ public:
     };
 
     // Returns edges corresponding to all trie transitions from vertex
-    std::vector<Edge> OutgoingEdges(AutomatonNode* vertex) const
-    {
+    std::vector<Edge> OutgoingEdges(AutomatonNode* vertex) const {
         std::vector <Edge> edges;
-        for (auto it = vertex->trie_transitions.begin(); it != vertex->trie_transitions.end(); ++it )
-        {
-            edges.push_back(Edge(vertex, &(it->second), it->first));
+        for (std::pair<char, AutomatonNode> pair : vertex->trie_transitions) {
+            edges.push_back(Edge(vertex, &(vertex->trie_transitions.find(pair.first)->second), 
+                                 pair.first));
         }    
         return edges;
     }
@@ -424,12 +423,14 @@ private:
     }
 
     static void BuildSuffixLinks(Automaton* automaton) {
-       AutomatonNode* node = &automaton->root_; 
-       node->suffix_link = node;
-
+        internal::SuffixLinkCalculator visitor(&automaton->root_);
+        traverses::BreadthFirstSearch(automaton->root_, internal::AutomatonGraph(), visitor);
     }
 
-    static void BuildTerminalLinks(Automaton* automaton);
+    static void BuildTerminalLinks(Automaton* automaton) {
+        internal::TerminalLinkCalculator visitor(&automaton->root_);
+        traverses::BreadthFirstSearch(automaton->root_, internal::AutomatonGraph(), visitor);
+    }
 
     std::vector<std::string> words_;
     std::vector<size_t> ids_;
@@ -487,7 +488,11 @@ private:
     std::unique_ptr<aho_corasick::Automaton> aho_corasick_automaton_;
 };
 
-std::string ReadString(std::istream& input_stream);
+std::string ReadString(std::istream& input_stream) {
+    std::string str;
+    input_stream >> str;
+    return str;
+}
 
 // Returns positions of the first character of every match
 std::vector<size_t> FindFuzzyMatches(const std::string& patternWithWildcards,
@@ -505,7 +510,13 @@ std::vector<size_t> FindFuzzyMatches(const std::string& patternWithWildcards,
     return occurrences;
 }
 
-void Print(const std::vector<size_t>& sequence);
+void Print(const std::vector<size_t>& sequence) {
+    std::cout << sequence.size() << "\n";
+    for (int i = 0; i < sequence.size(); ++i) {
+        std::cout << sequence[i] << " ";
+    }
+    std::cout << "\n";
+}
 
 void testAll();
 
