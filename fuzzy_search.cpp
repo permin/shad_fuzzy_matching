@@ -441,7 +441,9 @@ private:
 // Consecutive delimiters are not grouped together and are deemed
 // to delimit empty strings
 template <class Predicate>
-std::vector<std::string> Split(const std::string& string, Predicate is_delimiter);
+std::vector<std::string> Split(const std::string& string, Predicate is_delimiter) {
+    
+}
 
 // Wildcard is a character that may be substituted
 // for any of all possible characters
@@ -452,10 +454,20 @@ public:
         pattern_length_(0) {
     }
 
-    void Init(const std::string& pattern, char wildcard);
+    void Init(const std::string& pattern, char wildcard) {
+        std::vector<std::string> splittedPattern = Split(pattern, wildcard);
+        aho_corasick::AutomatonBuilder builder;
+        for (int i = 0; i < splittedPattern.size(); ++i) {
+           builder.Add(splittedPattern[i], i); 
+        }
+
+    }
 
     // Resets matcher to start scanning new stream
-    void Reset();
+    void Reset() {
+        words_occurrences_by_position_.clear();
+        state_ = aho_corasick_automaton_->Root();
+    }
 
     /* В данном случае Callback -- это функция,
      * которая будет вызвана при наступлении
