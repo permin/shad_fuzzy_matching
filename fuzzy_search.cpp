@@ -22,6 +22,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include <cassert>
+
 //  std::make_unique will be available since c++14
 //  Implementation was taken from http://herbsutter.com/gotw/_102/
 template<typename T, typename... Args>
@@ -236,7 +238,8 @@ public:
      * контесте, который выдaет compilation error
      */
     void DiscoverVertex(AutomatonNode* node) override {
-        if ((node->suffix_link)->matched_string_ids.empty() && node != root_) {
+        // TBD : && node != root_
+        if ((node->suffix_link)->matched_string_ids.empty()) {
            node->terminal_link = (node->suffix_link)->terminal_link; 
         } else {
            node->terminal_link = node->suffix_link; 
@@ -367,6 +370,7 @@ public:
     // terminal links.
     template <class Callback>
     void GenerateMatches(NodeReference node, Callback on_match) {
+        std::cout << "matches generated" << std::endl;
         while (node) {
             NodeReference::MatchedStringIteratorRange matched_string_ids = node.matchedStringIds();
             for (auto id : matched_string_ids) {
@@ -444,7 +448,17 @@ private:
 // to delimit empty strings
 template <class Predicate>
 std::vector<std::string> Split(const std::string& string, Predicate is_delimiter) {
-    
+// TBD: implement Predicate by anonymous function or somewhat
+    std::vector<std::string> splittedString;
+    size_t last = 0;
+    for (size_t current : string) {
+       if (string[current] == is_delimiter) {
+           splittedString.push_back(string.substr(last, current - last));
+           last = current + 1;
+       }
+    }
+    splittedString.push_back(string.substr(last, string.size() - last));
+    return splittedString;
 }
 
 // Wildcard is a character that may be substituted
@@ -459,10 +473,20 @@ public:
     void Init(const std::string& pattern, char wildcard) {
         std::vector<std::string> splittedPattern = Split(pattern, wildcard);
         aho_corasick::AutomatonBuilder builder;
+        pattern_length_ = 0;
         for (int i = 0; i < splittedPattern.size(); ++i) {
-           builder.Add(splittedPattern[i], i); 
+            pattern_length_ += splittedPattern[i].size();
+            if (!splittedPattern[i].empty()) {
+                builder.Add(splittedPattern[i], pattern_length_);
+                ++number_of_words_;
+            }
+            ++pattern_length_;
         }
-
+        // TBD: check this
+        --pattern_length_;
+        assert(pattern_length_ == pattern.size());
+        aho_corasick_automaton_ = builder.Build();
+        state_ = aho_corasick_automaton_->Root();
     }
 
     // Resets matcher to start scanning new stream
@@ -490,7 +514,22 @@ public:
     // Scans new character and calls on_match() if
     // suffix of scanned characters matches pattern
     template<class Callback>
-    void Scan(char character, Callback on_match);
+    void Scan(char character, Callback on_match) {
+        state_ = state_.Next(character);
+        if (words_occurrences_by_position_.size() == pattern_length_) {
+            words_occurrences_by_position_.pop_front();
+        }
+        words_occurrences_by_position_.push_back(0);
+        aho_corasick_automaton_->GenerateMatches(state_, [this](int pos) {
+            if (words_occurrences_by_position_.size() >= pos) {
+                words_occurrences_by_position_[words_occurrences_by_position_.size() - pos] += 1;
+            }
+        });
+        if (words_occurrences_by_position_.size() == pattern_length_ && 
+            words_occurrences_by_position_[0] == number_of_words_) {
+            on_match();
+        }        
+    }
 
 private:
     // Storing only O(|pattern|) elements allows us
@@ -535,6 +574,7 @@ void Print(const std::vector<size_t>& sequence) {
 void testAll();
 
 int main() {
+    freopen("input.txt", "r", stdin);
     const char wildcard = '?';
     const std::string patternWithWildcards = ReadString(std::cin);
     const std::string text = ReadString(std::cin);
