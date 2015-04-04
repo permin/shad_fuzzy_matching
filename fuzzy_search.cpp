@@ -138,6 +138,7 @@ struct AutomatonNode {
     std::map<char, AutomatonNode*> automaton_transitions;
     AutomatonNode* suffix_link;
     AutomatonNode* terminal_link;
+    // TBD: think about operator==
 };
 
 // Returns nullptr if there is no such transition
@@ -153,11 +154,15 @@ AutomatonNode* GetTrieTransition(AutomatonNode* node, char character)
 // Performs transition in automaton
 AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character)
 {
-    if (node->automaton_transitions.count(character) == 0) {
-        return root;
-    } else {
-        return node->automaton_transitions.find(character)->second;
+    AutomatonNode* current = node;
+    while (current->automaton_transitions.count(character) != 0 && current != root) {
+        current = current->suffix_link;
     }
+    if (current != root) {
+        current = current->automaton_transitions.find(character)->second;
+    }
+    node->automaton_transitions.insert(std::make_pair(character, current));
+    return current;
 }
 
 namespace internal {
@@ -184,8 +189,7 @@ public:
     std::vector<Edge> OutgoingEdges(AutomatonNode* vertex) const {
         std::vector <Edge> edges;
         for (std::pair<char, AutomatonNode> pair : vertex->trie_transitions) {
-            edges.push_back(Edge(vertex, &(vertex->trie_transitions.find(pair.first)->second), 
-                                 pair.first));
+            edges.push_back(Edge(vertex, GetTrieTransition(vertex, pair.first), pair.first));
         }    
         return edges;
     }
@@ -209,12 +213,8 @@ public:
     }
 
     void ExamineEdge(const AutomatonGraph::Edge& edge) override {
-        // Almost perfect
-        AutomatonNode* node = edge.source->suffix_link;
-        while (node != root_ && node->automaton_transitions.count(edge.character) == 0) {
-            node = node->suffix_link;
-        }
-        edge.target->suffix_link = GetNextNode(node, root_, edge.character);
+        // Perfect
+        edge.target->suffix_link = GetNextNode(edge.source->suffix_link, root_, edge.character);
     }
 
 private:
@@ -236,12 +236,7 @@ public:
      * контесте, который выдaет compilation error
      */
     void DiscoverVertex(AutomatonNode* node) override {
-        // TBD: may be it should be linked to nullptr
-        if (node->suffix_link == root_) {
-            node->terminal_link = root_;
-            return;
-        }
-        if ((node->suffix_link)->matched_string_ids.empty()) {
+        if ((node->suffix_link)->matched_string_ids.empty() && node != root_) {
            node->terminal_link = (node->suffix_link)->terminal_link; 
         } else {
            node->terminal_link = node->suffix_link; 
@@ -299,7 +294,7 @@ public:
     }
 
     NodeReference Next(char character) const {
-        return NodeReference(node_->automaton_transitions[character], root_);
+        return NodeReference(GetNextNode(node_, root_, character), root_);
     }
 
     NodeReference suffixLink() const {
@@ -371,7 +366,15 @@ public:
     // this node, i.e. collects all string ids reachable by
     // terminal links.
     template <class Callback>
-    void GenerateMatches(NodeReference node, Callback on_match);
+    void GenerateMatches(NodeReference node, Callback on_match) {
+        while (node) {
+            NodeReference::MatchedStringIteratorRange matched_string_ids = node.matchedStringIds();
+            for (auto id : matched_string_ids) {
+                on_match(id);
+            }
+            node = node.terminalLink();
+        }
+    }
 
 private:
     AutomatonNode root_;
@@ -414,7 +417,7 @@ private:
             if (next_node == nullptr) {
                 next_node = new AutomatonNode();
                 node->trie_transitions[*it] = *next_node;
-
+                node->automaton_transitions[*it] = &(node->trie_transitions.find(*it)->second);
             }
             node = next_node;
         }
