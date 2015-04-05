@@ -157,13 +157,17 @@ AutomatonNode* GetTrieTransition(AutomatonNode* node, char character)
 AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character)
 {
     AutomatonNode* current = node;
-    while (current->automaton_transitions.count(character) != 0 && current != root) {
+    while (current->automaton_transitions.count(character) == 0 && current != root) {
         current = current->suffix_link;
     }
-    if (current != root) {
+    if (current->automaton_transitions.count(character) != 0) {
         current = current->automaton_transitions.find(character)->second;
     }
     node->automaton_transitions.insert(std::make_pair(character, current));
+
+    if (current == root) {
+        // std::cout << "Next stays at root: " << character << "\n";
+    }
     return current;
 }
 
@@ -208,14 +212,18 @@ public:
     explicit SuffixLinkCalculator(AutomatonNode* root):
         root_(root) {}
 
-    void ExamineVertex(AutomatonNode* node) override {
-        if (node == root_){
+    void ExamineVertex(AutomatonNode* node) /*override*/ {
+        if (node == root_) {
             node->suffix_link = root_;
         }
     }
 
-    void ExamineEdge(const AutomatonGraph::Edge& edge) override {
-        // Perfect
+    void ExamineEdge(const AutomatonGraph::Edge& edge) /*override*/ {
+        // Not almost perfect
+        if (edge.source == root_) {
+            edge.target->suffix_link = root_;
+            return;
+        }
         edge.target->suffix_link = GetNextNode(edge.source->suffix_link, root_, edge.character);
     }
 
@@ -237,12 +245,16 @@ public:
      * как у нас слишком старый компилятор с++0x в
      * контесте, который выдaет compilation error
      */
-    void DiscoverVertex(AutomatonNode* node) override {
+    void DiscoverVertex(AutomatonNode* node) /*override*/ {
         // TBD : && node != root_
         if ((node->suffix_link)->matched_string_ids.empty()) {
            node->terminal_link = (node->suffix_link)->terminal_link; 
         } else {
            node->terminal_link = node->suffix_link; 
+        }
+        if (node->terminal_link == root_)
+        {
+            node->terminal_link = nullptr;
         }
     }
 
@@ -322,6 +334,18 @@ public:
         return (node_ == other.node_ && root_ == other.root_);
     }
 
+    void inf()
+    {
+        std::cout << "\n";
+        
+        for (auto it = node_->automaton_transitions.begin(); 
+                  it != node_->automaton_transitions.end(); ++it) {
+            std::cout << it->first << " " << it->second;
+            std::cout << "\n";
+        }
+        std::cout << "\n";
+    }
+
 private:
     AutomatonNode* node_;
     AutomatonNode* root_;
@@ -370,7 +394,7 @@ public:
     // terminal links.
     template <class Callback>
     void GenerateMatches(NodeReference node, Callback on_match) {
-        std::cout << "matches generated" << std::endl;
+        // std::cout << "matches generated" << std::endl;
         while (node) {
             NodeReference::MatchedStringIteratorRange matched_string_ids = node.matchedStringIds();
             for (auto id : matched_string_ids) {
@@ -419,9 +443,10 @@ private:
         {
             AutomatonNode* next_node = GetTrieTransition(node, *it);
             if (next_node == nullptr) {
-                next_node = new AutomatonNode();
-                node->trie_transitions[*it] = *next_node;
-                node->automaton_transitions[*it] = &(node->trie_transitions.find(*it)->second);
+                AutomatonNode tmp_node;
+                node->trie_transitions[*it] = tmp_node;
+                next_node = &(node->trie_transitions.find(*it)->second);
+                node->automaton_transitions[*it] = next_node;
             }
             node = next_node;
         }
@@ -451,13 +476,14 @@ std::vector<std::string> Split(const std::string& string, Predicate is_delimiter
 // TBD: implement Predicate by anonymous function or somewhat
     std::vector<std::string> splittedString;
     size_t last = 0;
-    for (size_t current : string) {
-       if (string[current] == is_delimiter) {
-           splittedString.push_back(string.substr(last, current - last));
-           last = current + 1;
-       }
+    for (size_t current = 0; current < string.size(); ++current) {
+        if (string[current] == is_delimiter) {
+            splittedString.push_back(string.substr(last, current - last));
+            last = current + 1;
+        }
     }
     splittedString.push_back(string.substr(last, string.size() - last));
+
     return splittedString;
 }
 
@@ -574,16 +600,19 @@ void Print(const std::vector<size_t>& sequence) {
 void testAll();
 
 int main() {
-    freopen("input.txt", "r", stdin);
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(nullptr);
+    // freopen("input.txt", "r", stdin);
     const char wildcard = '?';
     const std::string patternWithWildcards = ReadString(std::cin);
     const std::string text = ReadString(std::cin);
     Print(FindFuzzyMatches(patternWithWildcards, text, wildcard));
+    // testAll();
     return 0;
 }
 
 // ===== TESTING ZONE =====
-
+/*
 template<class T>
 std::ostream& operator << (std::ostream& os, const std::vector<T>& vector) {
     std::copy(
@@ -631,12 +660,15 @@ void testAll() {
         aho_corasick::NodeReference node = automaton->Root();
         for (char ch: text) {
             node = node.Next(ch);
+            // node.inf();
         }
         std::vector<size_t> string_ids;
 
         automaton->GenerateMatches(node, [&string_ids](size_t string_id) {
              string_ids.push_back(string_id);
         });
+
+        // std::cout << string_ids.size() << "\n" << string_ids << std::endl;
         std::sort(string_ids.begin(), string_ids.end());
 
         REQUIRE_EQUAL(string_ids, std::vector<size_t>({1, 2, 3}));
@@ -670,4 +702,6 @@ void testAll() {
             REQUIRE_EQUAL(occurrences, std::vector<size_t>({6}));
         }
     }
+// RODION - P2X
 }
+*/
