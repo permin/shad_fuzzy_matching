@@ -23,6 +23,16 @@
 #include <utility>
 
 #include <cassert>
+#include <ctime>
+
+// TBD: get rid of global variables
+clock_t start, timer;
+const double MAX_TIME = 0.0001;
+
+bool timeIsOver(clock_t timer) {
+    return (static_cast<float>(timer) / CLOCKS_PER_SEC) > MAX_TIME;
+}
+
 
 //  std::make_unique will be available since c++14
 //  Implementation was taken from http://herbsutter.com/gotw/_102/
@@ -599,7 +609,9 @@ void Print(const std::vector<size_t>& sequence) {
 
 void testAll();
 
+
 int main() {
+    start = clock();
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
     // freopen("input.txt", "r", stdin);
