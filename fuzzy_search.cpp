@@ -167,18 +167,22 @@ AutomatonNode* GetTrieTransition(AutomatonNode* node, char character)
 AutomatonNode* GetNextNode(AutomatonNode* node, AutomatonNode* root, char character)
 {
     AutomatonNode* current = node;
+    AutomatonNode* answer = node;
+    AutomatonNode* parent = node;
     while (current->automaton_transitions.count(character) == 0 && current != root) {
         current = current->suffix_link;
     }
     if (current->automaton_transitions.count(character) != 0) {
-        current = current->automaton_transitions.find(character)->second;
+        answer = current->automaton_transitions.find(character)->second;
     }
-    node->automaton_transitions.insert(std::make_pair(character, current));
-
-    if (current == root) {
-        // std::cout << "Next stays at root: " << character << "\n";
+    parent = current;
+    current = node;
+    while (current != parent) { 
+        current->automaton_transitions.insert(std::make_pair(character, answer));
+        current = current->suffix_link;
     }
-    return current;
+    current->automaton_transitions.insert(std::make_pair(character, answer));
+    return answer;
 }
 
 namespace internal {
@@ -614,7 +618,7 @@ int main() {
     start = clock();
     std::ios_base::sync_with_stdio(false);
     std::cin.tie(nullptr);
-    // freopen("input.txt", "r", stdin);
+    freopen("input.txt", "r", stdin);
     const char wildcard = '?';
     const std::string patternWithWildcards = ReadString(std::cin);
     const std::string text = ReadString(std::cin);
